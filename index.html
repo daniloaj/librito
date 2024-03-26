@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF to Flipbook</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.7.1.js" integrity="sha256-eKhayi8LEQwp4NKxN+CfCh+3qOVUtJn3QNZ0TciWLP4=" crossorigin="anonymous"></script>
+  <script src="turn.min.js"></script>
+  <style>
+    body {
+      background-color: #f4f4f4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    #flipbook {
+      width: 100%;
+      height: 100%;
+      background-color: #fff;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    #flipbook .hard {
+      background-color: #f2f2f2;
+      border: 1px solid #ddd;
+    }
+    .imagen{
+        width: 50%;
+        height: 50%;
+    }
+    button {
+      margin-top: 20px;
+      padding: 10px 20px;
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <form id="pdfForm">
+    <input type="file" id="pdfInput" accept=".pdf">
+    <button type="submit">Extraer Páginas</button>
+  </form>
+  
+  <div id="flipbook"></div>
+
+  <div id="pagination">
+    <input type="number" id="pageInput" min="1" placeholder="Página">
+    <button id="goToPage">Ir a Página</button>
+  </div>
+  <script>
+    let imagesArray = [];
+    let currentPage = '';
+
+    const form = document.getElementById('pdfForm');
+    const input = document.getElementById('pdfInput');
+    const flipbook = document.getElementById('flipbook');
+    const pageInput = document.getElementById('pageInput');
+    const goToPageBtn = document.getElementById('goToPage');
+    const flipbookElement = document.getElementById('flipbook');
+
+    form.addEventListener('submit', function(event) {
+      event.preventDefault();
+      flipbook.innerHTML = '';
+      imagesArray = [];
+      currentPage = '';
+      pageInput.value = currentPage;
+      const file = input.files[0];
+      if (file) {
+        const fileReader = new FileReader();
+        fileReader.onload = function() {
+          const typedarray = new Uint8Array(this.result);
+          pdfjsLib.getDocument(typedarray).promise.then(pdf => {
+            const pages = Array.from({ length: pdf.numPages }, (_, i) => i + 1);
+            const canvasArray = Array.from({ length: pages.length }, () => document.createElement('canvas'));
+
+            const renderPage = (pageNum) => {
+              if (pageNum <= pdf.numPages) {
+                pdf.getPage(pageNum).then(page => {
+                  const canvas = canvasArray[pageNum - 1];
+                  const context = canvas.getContext('2d');
+                  const viewport = page.getViewport({ scale: 1.5 });
+                  canvas.height = viewport.height;
+                  canvas.width = viewport.width;
+                  const renderContext = {
+                    canvasContext: context,
+                    viewport: viewport
+                  };
+                  page.render(renderContext).promise.then(() => {
+                    const imageData = canvas.toDataURL('image/jpeg');
+                    imagesArray.push(imageData);
+                    if (imagesArray.length === pages.length) {
+                      flipbook.innerHTML = '';
+                      imagesArray.forEach(image => {
+                        const pageDiv = document.createElement('div');
+                        pageDiv.style.backgroundImage = `url(${image})`;
+                        pageDiv.style.backgroundSize = '100% 100%';
+                        flipbook.appendChild(pageDiv);
+                      });
+                      $("#flipbook").turn({
+                        width: '100%',
+                        height: '100%',
+                        autoCenter: true
+                      });
+                    } else {
+                      renderPage(pageNum + 1);
+                    }
+                  });
+                });
+              }
+            };
+
+            renderPage(1);
+          });
+        };
+        fileReader.readAsArrayBuffer(file);
+      } else {
+        alert('Por favor, selecciona un archivo PDF');
+      }
+    });
+
+    goToPageBtn.addEventListener('click', () => goToPage(parseInt(pageInput.value)));
+
+    function goToPage(pageNum) {
+      if (pageNum >= 1 && pageNum <= imagesArray.length) {
+        currentPage = pageNum;
+        pageInput.value = currentPage;
+        $("#flipbook").turn('page', pageNum);
+      }
+    }
+
+    flipbookElement.addEventListener('flip', function(event) {
+      currentPage = event.data + 1;
+      pageInput.value = currentPage;
+    });
+  </script>
+</body>
+</html>
